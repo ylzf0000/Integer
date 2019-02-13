@@ -3,7 +3,7 @@
 #include <iostream>
 #include <functional>
 //#define INTEGER_NAMESPACE XXX
-#ifdef INTEGER_NAMESPACE
+#ifdef  INTEGER_NAMESPACE
 #define INTEGER_NAMESPACE_BEGIN  namespace INTEGER_NAMESPACE{
 #define INTEGER_NAMESPACE_END    }
 #else
@@ -50,6 +50,10 @@ public:
     self &operator-=(const self &right) { return this->operator+=(-__Integer(right)); }
     auto operator*=(const self &right)->self&;
     auto operator/=(const self &right)->self&;
+    self &operator++() { return *this += 1; }
+    self &operator--() { return *this -= 1; }
+    self operator++(int) { self right(*this); *this += 1; return right; }
+    self operator--(int) { self right(*this); *this -= 1; return right; }
     friend self operator+(const self &left, const self &right) { return __Integer(left) += right; }
     friend self operator-(const self &left, const self &right) { return __Integer(left) -= right; }
     friend self operator*(const self &left, const self &right) { return __Integer(left) *= right; }
@@ -212,8 +216,7 @@ std::ostream & __print(std::ostream & os, const __Integer<N, Cap>& right)
     if (right.m_sign)
         os << '-';
     unsigned cap_bit_num = __Integer<N, Cap>::__f_bitnum(Cap) - 1;
-    for (int i = right.m_length - 1, j = 0; i >= 0; --i, ++j)
-    {
+    for (int i = right.m_length - 1, j = 0; i >= 0; --i, ++j){
         unsigned bit_num = __Integer<N, Cap>::__f_bitnum(right.m_data[i]);
         unsigned zero_num = cap_bit_num - bit_num;
         if (j)

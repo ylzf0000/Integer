@@ -22,6 +22,11 @@ int main()
     PRINT_VAR(a * b);
     PRINT_VAR(-a * b);
     PRINT_VAR(a * -b);
+    //while (true)
+    //{
+    //    PRINT_VAR(b);
+    //    ++b;
+    //}
     //long long x = 1000000000;
     //Integer i = x;
     //cout << x << endl;
