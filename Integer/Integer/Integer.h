@@ -45,7 +45,7 @@ public:
     friend bool operator!=(const self &left, const self &right) { return !(left == right); }
     friend bool operator<=(const self &left, const self &right) { return left < right || left == right; }
     friend bool operator>=(const self &left, const self &right) { return left > right || left == right; }
-    self &operator-() { m_sign = !m_sign; return *this; }
+    self operator-()const { self right(*this); right.m_sign = !right.m_sign; return right; }
     auto operator+=(const self &right)->self&;
     self &operator-=(const self &right) { return this->operator+=(-__Integer(right)); }
     auto operator*=(const self &right)->self&;
@@ -65,8 +65,10 @@ private:
     /*两个都正或两个都负*/
     auto __add_all_positive_or_negative(const self &right)->self&;
     /*一正一负或一负一正*/
-    auto __add_one_positive_other_negative(const self &right)->self&;
-    unsigned m_data[N] = { 0 };
+    auto __add_one_positive_another_negative(const self &right)->self&;
+    /*减法：两个数均为正数，要求*this > right*/
+    auto __sub_all_positive_and_this_greater_than_right(const self &right)->self&;
+    int m_data[N] = { 0 };
     size_type m_length = 0;
     bool m_sign = false;
 };
@@ -91,7 +93,7 @@ template<unsigned N, unsigned Cap>
 inline auto __Integer<N, Cap>::operator+=(const self & right) -> self &
 {
     if (m_sign ^ right.m_sign)  //一正一负或一负一正
-        return __add_one_positive_other_negative(right);
+        return __add_one_positive_another_negative(right);
     else                        //两个都正或两个都负
         return __add_all_positive_or_negative(right);
 }
@@ -100,17 +102,23 @@ template<unsigned N, unsigned Cap>
 inline auto __Integer<N, Cap>::operator*=(const self & right) -> self &
 {
     __Integer<N, Cap> c;
+    c.m_sign = this->m_sign ^ right.m_sign;
     for (size_type i = 0; i < m_length; ++i)
-        for (size_type j = 0; j < right.m_length; ++j)
-        {
-            long long tmp = m_data[i] * right.m_data[j];
-            c.m_data[i + j] += tmp % Cap;
-            c.m_data[i + j + 1] += tmp / Cap;
+        for (size_type j = 0; j < right.m_length; ++j) {
+            long long tmp = (long long)m_data[i] * right.m_data[j];
+            c.m_data[i + j] += static_cast<unsigned>(tmp % Cap);
+            c.m_data[i + j + 1] += static_cast<unsigned>(tmp / Cap);
         }
     c.m_length = m_length + right.m_length - 1;
     if (c.m_data[c.m_length] != 0)
         ++c.m_length;
     return *this = c;
+}
+
+template<unsigned N, unsigned Cap>
+inline auto __Integer<N, Cap>::operator/=(const self & right) -> self &
+{
+    return *this;
 }
 
 template<unsigned N, unsigned Cap>
@@ -130,9 +138,37 @@ inline auto __Integer<N, Cap>::__add_all_positive_or_negative(const self & right
 }
 
 template<unsigned N, unsigned Cap>
-inline auto __Integer<N, Cap>::__add_one_positive_other_negative(const self & right) -> self &
+inline auto __Integer<N, Cap>::__add_one_positive_another_negative(const self & right) -> self &
 {
     size_type max_len = m_length > right.m_length ? m_length : right.m_length;
+    self a_abs = abs(), b_abs = right.abs();
+    if (m_sign && !right.m_sign) {   // a < 0, b > 0
+        if (a_abs < b_abs)              // |a| < |b|
+            return b_abs.__sub_all_positive_and_this_greater_than_right(a_abs);
+        else                            // |a| >= |b|
+            return *this = -a_abs.__sub_all_positive_and_this_greater_than_right(b_abs);
+    }
+    else {                          // a > 0, b < 0
+        if (a_abs < b_abs)              // |a| < |b|
+            return *this = -b_abs.__sub_all_positive_and_this_greater_than_right(a_abs);
+        else                            // |a| >= |b|
+            return a_abs.__sub_all_positive_and_this_greater_than_right(b_abs);
+    }
+    return *this;
+}
+
+template<unsigned N, unsigned Cap>
+inline auto __Integer<N, Cap>::__sub_all_positive_and_this_greater_than_right(const self & right) -> self &
+{
+    for (size_type i = 0; i < m_length; ++i) {
+        m_data[i] -= right.m_data[i];
+        if (m_data[i] < 0) {
+            m_data[i] += Cap;
+            --m_data[i + 1];
+        }
+    }
+    while (m_data[m_length - 1] == 0)
+        --m_length;
     return *this;
 }
 
