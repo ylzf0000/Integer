@@ -4,24 +4,23 @@ using namespace std;
 #define PRINT_VAR(x) cout << (#x) << ": " << (x) << endl;
 int main()
 {
-    //unsigned long long x = 123;
-    //for (int i = 0; i < 66; ++i)
+    //Integer x = 123;
+    //while (true)
     //{
-    //    Integer val = x;
-    //    cout << val << endl;
+    //    PRINT_VAR(x);
     //    x *= 10;
     //}
     //puts("");
-    Integer a = 10002002000003;
-    Integer b = 100200000300000;
+    Integer a = 12312346352344345734ULL;
+    Integer b = -2;
+    Integer c = 123;
+    Integer z1 = 12312310000000000;
+    Integer z2 = 0;
     //Integer c = a * b;
-    PRINT_VAR(a);
-    PRINT_VAR(b);
-    PRINT_VAR(b + a);
-    PRINT_VAR(b - a);
+    PRINT_VAR(a / 1);
+    PRINT_VAR(a - b);
     PRINT_VAR(a * b);
-    PRINT_VAR(-a * b);
-    PRINT_VAR(a * -b);
+    //PRINT_VAR(z1/0);
     //while (true)
     //{
     //    PRINT_VAR(b);

@@ -2,6 +2,8 @@
 #pragma once
 #include <iostream>
 #include <functional>
+#include <cassert>
+#include <type_traits>
 //#define INTEGER_NAMESPACE XXX
 #ifdef  INTEGER_NAMESPACE
 #define INTEGER_NAMESPACE_BEGIN  namespace INTEGER_NAMESPACE{
@@ -24,7 +26,7 @@ bool __equal(const __Integer<N, Cap> &left, const __Integer<N, Cap> &right);
 template<unsigned N, unsigned Cap>
 std::ostream & __print(std::ostream &os, const __Integer<N, Cap> &right);
 
-template<unsigned N = 10000, unsigned Cap = 1000000000>
+template<unsigned N = 1000, unsigned Cap = 1000000000>
 class __Integer
 {
 public:
@@ -33,9 +35,8 @@ public:
     __Integer() = default;
     __Integer(const self &right) = default;
     self &operator=(const self &right) = default;
-    __Integer(long long right) { this->operator=(right); }
-    auto operator=(long long right)->self&;
-    self abs()const { self right(*this); right.m_sign = false; return right; }
+    template<typename T> __Integer(T right);
+    template<typename T> auto operator=(T right)->self&;
     friend bool __less<N, Cap>(const __Integer<N, Cap> &left, const __Integer<N, Cap> &right);
     friend bool __equal<N, Cap>(const __Integer<N, Cap> &left, const __Integer<N, Cap> &right);
     friend std::ostream & __print<N, Cap>(std::ostream &os, const __Integer<N, Cap> &right);
@@ -45,7 +46,7 @@ public:
     friend bool operator!=(const self &left, const self &right) { return !(left == right); }
     friend bool operator<=(const self &left, const self &right) { return left < right || left == right; }
     friend bool operator>=(const self &left, const self &right) { return left > right || left == right; }
-    self operator-()const { self right(*this); right.m_sign = !right.m_sign; return right; }
+    self operator-()const { self right(*this); right.m_sign = !right.m_sign; right.__fix_if_zero(); return right; }
     auto operator+=(const self &right)->self&;
     self &operator-=(const self &right) { return this->operator+=(-__Integer(right)); }
     auto operator*=(const self &right)->self&;
@@ -59,6 +60,8 @@ public:
     friend self operator*(const self &left, const self &right) { return __Integer(left) *= right; }
     friend self operator/(const self &left, const self &right) { return __Integer(left) /= right; }
     friend std::ostream &operator<<(std::ostream &os, const self &right) { return __print(os, right); }
+    friend self abs(const self &right) { self ret(right); ret.m_sign = false; return ret; }
+
 private:
     static unsigned __f_bitnum(unsigned x) {
         unsigned ret = 0;
@@ -66,12 +69,24 @@ private:
             ++ret, x /= 10;
         return ret;
     }
+
+    struct SIGNED_T {};
+    struct UNSIGNED_T {};
+
+    template<bool b> struct SIGN_TRAIT {};
+    template<> struct SIGN_TRAIT<true> { using type = SIGNED_T; /*static constexpr bool value = true;*/ };
+    template<> struct SIGN_TRAIT<false> { using type = UNSIGNED_T;/* static constexpr bool value = false;*/ };
+    template<typename T> void __assign(T right, SIGNED_T);
+    template<typename T> void __assign(T right, UNSIGNED_T);
     /*两个都正或两个都负*/
     auto __add_all_positive_or_negative(const self &right)->self&;
     /*一正一负或一负一正*/
     auto __add_one_positive_another_negative(const self &right)->self&;
     /*减法：两个数均为正数，要求*this > right*/
     auto __sub_all_positive_and_this_greater_than_right(const self &right)->self&;
+    /*当*this == 0时，*this视为正数: m_sign = false*/
+    void __fix_if_zero() { m_sign = __equal_zero() ? false : m_sign; }
+    bool __equal_zero() { return m_length == 0; }
     int m_data[N] = { 0 };
     size_type m_length = 0;
     bool m_sign = false;
@@ -81,8 +96,26 @@ using Integer = __Integer<>;
 template class __Integer<>;
 
 template<unsigned N, unsigned Cap>
-inline auto __Integer<N, Cap>::operator=(long long right) -> self &
+template<typename T>
+inline __Integer<N, Cap>::__Integer(T right)
 {
+    operator=(right);
+}
+
+template<unsigned N, unsigned Cap>
+template<typename T>
+inline auto __Integer<N, Cap>::operator=(T right) -> self &
+{
+    static_assert(std::is_integral<T>::value, "A integer was required.");
+    __assign<T>(right, typename SIGN_TRAIT<std::is_signed<T>::value>::type());
+    return *this;
+}
+
+template<unsigned N, unsigned Cap>
+template<typename T>
+inline void __Integer<N, Cap>::__assign(T right, SIGNED_T)
+{
+    static_assert(std::is_signed<T>::value, "A signed integer was required.");
     m_sign = right < 0;
     right = m_sign ? -right : right;
     m_length = 0;
@@ -90,7 +123,19 @@ inline auto __Integer<N, Cap>::operator=(long long right) -> self &
         m_data[m_length++] = right % Cap;
         right /= Cap;
     }
-    return *this;
+}
+
+template<unsigned N, unsigned Cap>
+template<typename T>
+inline void __Integer<N, Cap>::__assign(T right, UNSIGNED_T)
+{
+    static_assert(std::is_unsigned<T>::value, "A unsigned integer was required.");
+    m_sign = false;
+    m_length = 0;
+    while (right) {
+        m_data[m_length++] = right % Cap;
+        right /= Cap;
+    }
 }
 
 template<unsigned N, unsigned Cap>
@@ -116,13 +161,34 @@ inline auto __Integer<N, Cap>::operator*=(const self & right) -> self &
     c.m_length = m_length + right.m_length - 1;
     if (c.m_data[c.m_length] != 0)
         ++c.m_length;
+    c.__fix_if_zero();
     return *this = c;
 }
 
 template<unsigned N, unsigned Cap>
 inline auto __Integer<N, Cap>::operator/=(const self & right) -> self &
 {
-    return *this;
+    assert(right != 0);
+    self a_abs = abs(*this);
+    const self &b_abs = abs(right);
+    if (a_abs < b_abs)
+        return *this = 0;
+    self ret = 0;
+    while (a_abs >= b_abs) {
+        self b = b_abs;
+        self tmp = 1;
+        while (b * 10 <= a_abs)
+            b *= 10, tmp *= 10;
+        int i;
+        for (i = 2; i * b <= a_abs; ++i);
+        --i;
+        b *= i;
+        tmp *= i;
+        ret += tmp;
+        a_abs -= b;
+    }
+    ret.m_sign = m_sign ^ right.m_sign;
+    return *this = ret;
 }
 
 template<unsigned N, unsigned Cap>
@@ -144,11 +210,10 @@ inline auto __Integer<N, Cap>::__add_all_positive_or_negative(const self & right
 template<unsigned N, unsigned Cap>
 inline auto __Integer<N, Cap>::__add_one_positive_another_negative(const self & right) -> self &
 {
-    size_type max_len = m_length > right.m_length ? m_length : right.m_length;
-    self a_abs = abs(), b_abs = right.abs();
+    self a_abs = abs(*this), b_abs = abs(right);
     if (m_sign && !right.m_sign) {   // a < 0, b > 0
         if (a_abs < b_abs)              // |a| < |b|
-            return b_abs.__sub_all_positive_and_this_greater_than_right(a_abs);
+            return *this = b_abs.__sub_all_positive_and_this_greater_than_right(a_abs);
         else                            // |a| >= |b|
             return *this = -a_abs.__sub_all_positive_and_this_greater_than_right(b_abs);
     }
@@ -156,9 +221,8 @@ inline auto __Integer<N, Cap>::__add_one_positive_another_negative(const self & 
         if (a_abs < b_abs)              // |a| < |b|
             return *this = -b_abs.__sub_all_positive_and_this_greater_than_right(a_abs);
         else                            // |a| >= |b|
-            return a_abs.__sub_all_positive_and_this_greater_than_right(b_abs);
+            return *this = a_abs.__sub_all_positive_and_this_greater_than_right(b_abs);
     }
-    return *this;
 }
 
 template<unsigned N, unsigned Cap>
@@ -173,6 +237,7 @@ inline auto __Integer<N, Cap>::__sub_all_positive_and_this_greater_than_right(co
     }
     while (m_data[m_length - 1] == 0)
         --m_length;
+    __fix_if_zero();
     return *this;
 }
 
@@ -213,17 +278,24 @@ bool __equal(const __Integer<N, Cap> &left, const __Integer<N, Cap> &right)
 template<unsigned N, unsigned Cap>
 std::ostream & __print(std::ostream & os, const __Integer<N, Cap>& right)
 {
+    if (right == 0)
+        return os << 0;
     if (right.m_sign)
         os << '-';
     unsigned cap_bit_num = __Integer<N, Cap>::__f_bitnum(Cap) - 1;
-    for (int i = right.m_length - 1, j = 0; i >= 0; --i, ++j){
-        unsigned bit_num = __Integer<N, Cap>::__f_bitnum(right.m_data[i]);
-        unsigned zero_num = cap_bit_num - bit_num;
-        if (j)
-            for (unsigned k = 0; k < zero_num; ++k)
-                os << '0';
-        if (right.m_data[i])
-            os << right.m_data[i];
+    for (int i = right.m_length - 1, j = 0; i >= 0; --i, ++j) {
+        if (j) {
+            os.width(cap_bit_num);
+            os.fill('0');
+        }
+        os << right.m_data[i];
+        //unsigned bit_num = __Integer<N, Cap>::__f_bitnum(right.m_data[i]);
+        //unsigned zero_num = cap_bit_num - bit_num;
+        //if (j)
+        //    for (unsigned k = 0; k < zero_num; ++k)
+        //        os << '0';
+        //if (right.m_data[i])
+        //    os << right.m_data[i];
     }
     return os;
 }
